@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Casa del Nonno Kasse V3</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<section id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <img src="logo.png" class="login-logo" onerror="this.style.display='none'">
+    <h1>LA CASA DEL NONNO</h1>
+    <p>Kassensystem Anmeldung</p>
+    <input id="loginUsername" placeholder="Benutzername">
+    <input id="loginPassword" type="password" placeholder="Passwort">
+    <button id="loginBtn">Einloggen</button>
+    <div id="loginError" class="login-error"></div>
+  </div>
+</section>
+<section id="appScreen" class="app hidden">
+  <header class="header">
+    <div class="brand"><img src="logo.png" class="logo" onerror="this.style.display='none'"><div><h1>LA CASA DEL NONNO</h1><p>CAFFÈ & DOLCI FATTI CON AMORE</p></div></div>
+    <div class="user-box"><div>Angemeldet als</div><strong id="currentUserName">---</strong><span id="currentUserRole">---</span></div>
+    <div class="top-actions"><button id="inventoryBtn">📦 Inventur</button><button id="adminBtn">⚙️ Admin</button><button id="statsBtn">📊 Statistik</button><button id="logoutBtn">🚪 Logout</button></div>
+    <div class="clock"><div id="clockTime">--:--</div><span id="clockDate">--.--.----</span></div>
+  </header>
+  <main class="main">
+    <section class="left"><div id="categoryTabs" class="tabs"></div><div id="loadingText" class="loading">Firebase wird geladen...</div><div id="productGrid" class="product-grid"></div></section>
+    <aside class="cart">
+      <div class="cart-head"><h2>🛒 Warenkorb</h2><button id="clearCartBtn">Storno</button></div>
+      <div id="cartList" class="cart-list"></div>
+      <div class="discount-area"><h2>🏷️ Rabatt</h2><div id="discountButtons" class="discount-buttons"></div></div>
+      <div class="total-box"><div>GESAMT</div><strong id="totalValue">0 €</strong><button id="checkoutBtn">💵 Bestellung abschließen</button></div>
+    </aside>
+  </main>
+</section>
+<div id="inventoryModal" class="modal hidden"><div class="modal-card"><h2>📦 Inventur</h2><div id="inventoryList"></div><div class="modal-actions"><button id="saveInventoryBtn">Speichern</button><button data-close="inventoryModal">Schließen</button></div></div></div>
+<div id="adminModal" class="modal hidden"><div class="modal-card wide"><h2>⚙️ Adminbereich</h2><h3>Produkt hinzufügen</h3><div class="admin-grid"><input id="adminCategory" placeholder="Kategorie z.B. 🍷 BEVANDE"><input id="adminName" placeholder="Produktname"><input id="adminPrice" type="number" placeholder="Preis"><input id="adminIcon" placeholder="Emoji"><button id="addProductBtn">Produkt speichern</button></div><h3>Produkte</h3><div id="adminProducts"></div><div class="modal-actions"><button data-close="adminModal">Schließen</button></div></div></div>
+<div id="statsModal" class="modal hidden"><div class="modal-card wide"><h2>📊 Statistik</h2><div id="statsContent"></div><div class="modal-actions"><button data-close="statsModal">Schließen</button></div></div></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
