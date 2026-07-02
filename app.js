@@ -3,12 +3,11 @@ import { DEFAULT_PRODUCTS, MENU_RECIPES } from "./products.js";
 import { productKey, euro, can } from "./utils.js";
 import { login, logout, restoreUser, currentUser } from "./auth.js";
 
-const webhookURL = "https://discord.com/api/webhooks/1512118563182346342/vT3WSKctnKGRsCUuNrzINuBU9lIXZ7sDmwzKaxX-qroo0Ze4NZSuC9SI9YaUazDVJsuo";
+const webhookURL = "";
 
 const inventoryRef = doc(db, "inventory", "stock");
-const productsRef = doc(db, "settings", "products");
 
-let products = {};
+let products = DEFAULT_PRODUCTS;
 let inventory = {};
 let activeCategory = "";
 let quantities = {};
@@ -26,8 +25,10 @@ function showApp(user) {
   $("currentUserRole").innerText = user.role;
 
   $("inventoryBtn").style.display = can(user.role, "inventory") ? "" : "none";
-  $("adminBtn").style.display = can(user.role, "admin") ? "" : "none";
+  $("adminBtn").style.display = "none";
   $("statsBtn").style.display = can(user.role, "stats") ? "" : "none";
+
+  activeCategory = Object.keys(products)[0];
 
   renderDiscounts();
   renderOrder();
@@ -49,32 +50,6 @@ async function handleLogin() {
   }
 }
 
-function normalizeProducts(data) {
-  const result = {};
-
-  Object.entries(data || {}).forEach(([cat, items]) => {
-    result[cat] = (items || []).map(item => {
-      if (Array.isArray(item)) {
-        return {
-          name: item[0],
-          price: item[1],
-          icon: item[2] || "🍽️",
-          menu: item[3] || ""
-        };
-      }
-
-      return {
-        name: item.name,
-        price: item.price,
-        icon: item.icon || item.emoji || "🍽️",
-        menu: item.menu || ""
-      };
-    });
-  });
-
-  return result;
-}
-
 function getDefaultInventory() {
   const d = {};
 
@@ -88,18 +63,6 @@ function getDefaultInventory() {
 
 async function initFirebaseData() {
   try {
-    const ps = await getDoc(productsRef);
-
-    if (ps.exists()) {
-      products = normalizeProducts(ps.data().products || DEFAULT_PRODUCTS);
-    } else {
-      products = normalizeProducts(DEFAULT_PRODUCTS);
-    }
-
-    await setDoc(productsRef, { products });
-
-    activeCategory = Object.keys(products)[0];
-
     const inv = await getDoc(inventoryRef);
 
     if (!inv.exists()) {
@@ -269,6 +232,7 @@ function clearCart() {
     orders = [];
     discount = 0;
     renderOrder();
+    renderDiscounts();
   }
 }
 
@@ -427,7 +391,7 @@ async function finishOrder() {
 }
 
 async function sendDiscordLog(sale) {
-  if (!webhookURL || webhookURL === "https://discord.com/api/webhooks/1512118563182346342/vT3WSKctnKGRsCUuNrzINuBU9lIXZ7sDmwzKaxX-qroo0Ze4NZSuC9SI9YaUazDVJsuo") return;
+  if (!webhookURL || webhookURL === "DEIN_DISCORD_WEBHOOK_HIER_EINFÜGEN") return;
 
   const text = sale.items.map(i => `${i.qty}x ${i.name} - ${euro(i.total)}`).join("\n");
 
@@ -507,80 +471,6 @@ async function saveInventory() {
   closeModal("inventoryModal");
 }
 
-function openAdmin() {
-  if (!can(currentUser.role, "admin")) return;
-
-  renderAdminProducts();
-  $("adminModal").classList.remove("hidden");
-}
-
-function renderAdminProducts() {
-  const box = $("adminProducts");
-  box.innerHTML = "";
-
-  Object.entries(products).forEach(([cat, items]) => {
-    box.innerHTML += `<h3>${cat}</h3>`;
-
-    items.forEach((item, idx) => {
-      box.innerHTML += `
-        <div class="admin-row">
-          <div>${item.icon} ${item.name} - ${euro(item.price)}</div>
-          <div>${cat}</div>
-          <button onclick="deleteProduct('${cat}', ${idx})">Löschen</button>
-        </div>
-      `;
-    });
-  });
-}
-
-async function addProduct() {
-  const cat = $("adminCategory").value.trim();
-  const name = $("adminName").value.trim();
-  const price = parseInt($("adminPrice").value);
-  const icon = $("adminIcon").value.trim() || "🍽️";
-
-  if (!cat || !name || isNaN(price)) {
-    alert("Kategorie, Name und Preis ausfüllen.");
-    return;
-  }
-
-  if (!products[cat]) products[cat] = [];
-
-  products[cat].push({
-    name,
-    price,
-    icon,
-    menu: ""
-  });
-
-  await setDoc(productsRef, { products });
-
-  inventory[productKey(name)] = inventory[productKey(name)] ?? 100;
-  await setDoc(inventoryRef, inventory);
-
-  ["adminCategory", "adminName", "adminPrice", "adminIcon"].forEach(id => $(id).value = "");
-
-  renderTabs();
-  renderProducts();
-  renderAdminProducts();
-}
-
-async function deleteProduct(cat, index) {
-  if (!confirm("Produkt wirklich löschen?")) return;
-
-  products[cat].splice(index, 1);
-
-  if (products[cat].length === 0) delete products[cat];
-
-  await setDoc(productsRef, { products });
-
-  activeCategory = Object.keys(products)[0];
-
-  renderTabs();
-  renderProducts();
-  renderAdminProducts();
-}
-
 async function openStats() {
   if (!can(currentUser.role, "stats")) return;
 
@@ -625,6 +515,7 @@ function updateClock() {
 }
 
 $("loginBtn").addEventListener("click", handleLogin);
+
 $("loginPassword").addEventListener("keydown", e => {
   if (e.key === "Enter") handleLogin();
 });
@@ -638,9 +529,11 @@ $("clearCartBtn").addEventListener("click", clearCart);
 $("checkoutBtn").addEventListener("click", finishOrder);
 $("inventoryBtn").addEventListener("click", openInventory);
 $("saveInventoryBtn").addEventListener("click", saveInventory);
-$("adminBtn").addEventListener("click", openAdmin);
-$("addProductBtn").addEventListener("click", addProduct);
 $("statsBtn").addEventListener("click", openStats);
+
+if ($("adminBtn")) {
+  $("adminBtn").style.display = "none";
+}
 
 document.querySelectorAll("[data-close]").forEach(btn => {
   btn.addEventListener("click", () => closeModal(btn.dataset.close));
@@ -652,7 +545,6 @@ window.addItem = addItem;
 window.removeItem = removeItem;
 window.setDiscount = setDiscount;
 window.removeDiscount = removeDiscount;
-window.deleteProduct = deleteProduct;
 
 updateClock();
 setInterval(updateClock, 1000);
