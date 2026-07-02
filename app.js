@@ -3,7 +3,7 @@ import { DEFAULT_PRODUCTS, MENU_RECIPES } from "./products.js";
 import { productKey, euro, can } from "./utils.js";
 import { login, logout, restoreUser, currentUser } from "./auth.js";
 
-const webhookURL = "DEIN_DISCORD_WEBHOOK_HIER_EINFÜGEN";
+const webhookURL = "https://discord.com/api/webhooks/1512118563182346342/vT3WSKctnKGRsCUuNrzINuBU9lIXZ7sDmwzKaxX-qroo0Ze4NZSuC9SI9YaUazDVJsuo";
 const inventoryRef = doc(db,"inventory","stock");
 const productsRef = doc(db,"settings","products");
 let products = {}, inventory = {}, activeCategory = "", quantities = {}, orders = [], discount = 0, firebaseLoaded = false;
