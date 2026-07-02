@@ -427,7 +427,7 @@ async function finishOrder() {
 }
 
 async function sendDiscordLog(sale) {
-  if (!webhookURL || webhookURL === "DEIN_DISCORD_WEBHOOK_HIER_EINFÜGEN") return;
+  if (!webhookURL || webhookURL === "https://discord.com/api/webhooks/1512118563182346342/vT3WSKctnKGRsCUuNrzINuBU9lIXZ7sDmwzKaxX-qroo0Ze4NZSuC9SI9YaUazDVJsuo") return;
 
   const text = sale.items.map(i => `${i.qty}x ${i.name} - ${euro(i.total)}`).join("\n");
 
