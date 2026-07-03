@@ -41,16 +41,8 @@ export const DEFAULT_PRODUCTS = {
     { name: "Zeppole di San Giuseppe", price: 320, icon: "🥐" }
   ],
 
-  "⭐ MENÜ 1": [
+  "⭐ MENÜ ": [
     { name: "Menü 1: Eistee + Pizza nach Wahl + Panna Cotta", price: 540, icon: "🍽️", menu: "menu1" }
-  ],
-
-  "⭐ MENÜ 2": [
-    { name: "Menü 2: Cola + Pasta nach Wahl + Tiramisu", price: 600, icon: "🍽️", menu: "menu2" }
-  ],
-
-  "⭐ MENÜ 3": [
-    { name: "Menü 3: Energy Drink + Grigliata Mista di Pesce + Coppa Gelato", price: 860, icon: "🍽️", menu: "menu3" }
   ]
 };
 
