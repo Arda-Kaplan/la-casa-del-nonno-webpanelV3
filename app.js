@@ -1,555 +1,671 @@
-import { db, doc, getDoc, setDoc, onSnapshot, runTransaction, collection, addDoc, serverTimestamp, getDocs } from "./firebase.js";
-import { DEFAULT_PRODUCTS, MENU_RECIPES } from "./products.js";
-import { productKey, euro, can } from "./utils.js";
-import { login, logout, restoreUser, currentUser } from "./auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  serverTimestamp,
+  query,
+  orderBy
+} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
-const webhookURL = "";
+import { firebaseConfig, DISCORD_WEBHOOK_URL } from "./firebase-config.js";
 
-const inventoryRef = doc(db, "inventory", "stock");
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-let products = DEFAULT_PRODUCTS;
-let inventory = {};
-let activeCategory = "";
-let quantities = {};
-let orders = [];
+let currentUser = null;
+let products = [];
+let users = [];
+let sales = [];
+let cart = [];
+let selectedCategory = "Alle";
 let discount = 0;
-let firebaseLoaded = false;
+let editingProductId = null;
+let editingUserId = null;
+
+const rolePower = {
+  "Geschäftsführer": 4,
+  "Geschäftsleitung": 3,
+  "Mitarbeiter": 2,
+  "Praktikant": 1
+};
+
+const defaultProducts = [
+  { name: "Cola", category: "Getränke", price: 130, icon: "🥤", stock: 100 },
+  { name: "Tè Freddo al Limone", category: "Getränke", price: 195, icon: "🥤", stock: 100 },
+  { name: "Energy Drink", category: "Getränke", price: 200, icon: "⚡", stock: 100 },
+  { name: "Vino della Casa", category: "Getränke", price: 350, icon: "🍷", stock: 100 },
+  { name: "Pizza Margherita", category: "Pizza", price: 330, icon: "🍕", stock: 100 },
+  { name: "Pizza Salame", category: "Pizza", price: 330, icon: "🍕", stock: 100 },
+  { name: "Pizza Tonno", category: "Pizza", price: 330, icon: "🍕", stock: 100 },
+  { name: "Pasta Carbonara", category: "Pasta", price: 300, icon: "🍝", stock: 100 },
+  { name: "Pasta Bolognese", category: "Pasta", price: 300, icon: "🍝", stock: 100 },
+  { name: "Lasagna", category: "Pasta", price: 550, icon: "🍝", stock: 100 },
+  { name: "Tiramisu", category: "Dessert", price: 300, icon: "🍰", stock: 100 },
+  { name: "Panna Cotta", category: "Dessert", price: 300, icon: "🍮", stock: 100 },
+  { name: "Menü 1", category: "Menüs", price: 540, icon: "🍽️", stock: 100 },
+  { name: "Menü 2", category: "Menüs", price: 600, icon: "🍽️", stock: 100 },
+  { name: "Menü 3", category: "Menüs", price: 860, icon: "🍽️", stock: 100 }
+];
+
+const menuIngredients = {
+  "Menü 1": ["Tè Freddo al Limone", "Pizza Margherita", "Panna Cotta"],
+  "Menü 2": ["Cola", "Pasta Carbonara", "Tiramisu"],
+  "Menü 3": ["Energy Drink"]
+};
 
 const $ = id => document.getElementById(id);
 
-function showApp(user) {
+$("loginBtn").addEventListener("click", login);
+$("logoutBtn").addEventListener("click", logout);
+$("checkoutBtn").addEventListener("click", checkout);
+$("clearCartBtn").addEventListener("click", clearCart);
+$("removeDiscountBtn").addEventListener("click", () => {
+  discount = 0;
+  renderDiscountButtons();
+  renderCart();
+});
+$("addProductBtn").addEventListener("click", saveProduct);
+$("addUserBtn").addEventListener("click", saveUser);
+$("dailyCloseBtn").addEventListener("click", dailyClose);
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => switchPage(btn.dataset.page));
+});
+
+$("loginUsername").addEventListener("keydown", e => {
+  if (e.key === "Enter") login();
+});
+
+$("loginPassword").addEventListener("keydown", e => {
+  if (e.key === "Enter") login();
+});
+
+async function boot() {
+  await ensureDefaultAdmin();
+  await ensureDefaultProducts();
+  listenProducts();
+  listenUsers();
+  listenSales();
+  renderDiscountButtons();
+}
+
+async function ensureDefaultAdmin() {
+  const adminRef = doc(db, "users", "admin");
+  const snap = await getDoc(adminRef);
+
+  if (!snap.exists()) {
+    await setDoc(adminRef, {
+      username: "admin",
+      password: "admin123",
+      role: "Geschäftsführer",
+      active: true,
+      createdAt: serverTimestamp()
+    });
+  }
+}
+
+async function ensureDefaultProducts() {
+  const snap = await getDocs(collection(db, "products"));
+
+  if (snap.empty) {
+    for (const p of defaultProducts) {
+      await addDoc(collection(db, "products"), {
+        ...p,
+        active: true,
+        createdAt: serverTimestamp()
+      });
+    }
+  }
+}
+
+async function login() {
+  const username = $("loginUsername").value.trim();
+  const password = $("loginPassword").value.trim();
+
+  $("loginError").textContent = "";
+
+  if (!username || !password) {
+    $("loginError").textContent = "Bitte Benutzername und Passwort eingeben.";
+    return;
+  }
+
+  const userRef = doc(db, "users", username);
+  const snap = await getDoc(userRef);
+
+  if (!snap.exists()) {
+    $("loginError").textContent = "Benutzer nicht gefunden.";
+    return;
+  }
+
+  const user = snap.data();
+
+  if (!user.active) {
+    $("loginError").textContent = "Dieser Benutzer ist deaktiviert.";
+    return;
+  }
+
+  if (user.password !== password) {
+    $("loginError").textContent = "Passwort falsch.";
+    return;
+  }
+
+  currentUser = user;
   $("loginScreen").classList.add("hidden");
   $("appScreen").classList.remove("hidden");
+  $("currentUserLabel").textContent = `${user.username} | ${user.role}`;
 
-  $("currentUserName").innerText = user.username;
-  $("currentUserRole").innerText = user.role;
-
-  $("inventoryBtn").style.display = can(user.role, "inventory") ? "" : "none";
-  $("adminBtn").style.display = "none";
-  $("statsBtn").style.display = can(user.role, "stats") ? "" : "none";
-
-  activeCategory = Object.keys(products)[0];
-
-  renderDiscounts();
-  renderOrder();
-  initFirebaseData();
+  applyRoleVisibility();
+  await discordLog(`✅ Login: **${user.username}** (${user.role})`);
 }
 
-function showLogin() {
+function logout() {
+  currentUser = null;
+  cart = [];
+  discount = 0;
   $("loginScreen").classList.remove("hidden");
   $("appScreen").classList.add("hidden");
+  $("loginPassword").value = "";
+  renderCart();
 }
 
-async function handleLogin() {
-  try {
-    $("loginError").innerText = "";
-    const user = await login($("loginUsername").value, $("loginPassword").value);
-    showApp(user);
-  } catch (e) {
-    $("loginError").innerText = e.message;
-  }
+function applyRoleVisibility() {
+  const power = rolePower[currentUser.role] || 0;
+
+  document.querySelector('[data-page="usersPage"]').style.display = power >= 4 ? "block" : "none";
+  document.querySelector('[data-page="productsPage"]').style.display = power >= 3 ? "block" : "none";
+  document.querySelector('[data-page="inventoryPage"]').style.display = power >= 2 ? "block" : "none";
+  document.querySelector('[data-page="statsPage"]').style.display = power >= 3 ? "block" : "none";
+  document.querySelector('[data-page="closingPage"]').style.display = power >= 3 ? "block" : "none";
 }
 
-function getDefaultInventory() {
-  const d = {};
-
-  Object.values(products).flat().forEach(item => {
-    if (item.menu) return;
-    d[productKey(item.name)] = 100;
-  });
-
-  return d;
+function hasPower(minRole) {
+  return (rolePower[currentUser?.role] || 0) >= minRole;
 }
 
-async function initFirebaseData() {
-  try {
-    const inv = await getDoc(inventoryRef);
+function switchPage(pageId) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active-page"));
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
 
-    if (!inv.exists()) {
-      inventory = getDefaultInventory();
-      await setDoc(inventoryRef, inventory);
-    }
-
-    onSnapshot(inventoryRef, s => {
-      inventory = s.exists() ? s.data() : getDefaultInventory();
-      firebaseLoaded = true;
-
-      $("loadingText").style.display = "none";
-
-      renderTabs();
-      renderProducts();
-      renderInventoryIfOpen();
-    });
-  } catch (e) {
-    console.error(e);
-    $("loadingText").innerText = "Firebase Fehler: " + e.message;
-  }
+  $(pageId).classList.add("active-page");
+  document.querySelector(`[data-page="${pageId}"]`).classList.add("active");
 }
 
-function renderTabs() {
-  const t = $("categoryTabs");
-  t.innerHTML = "";
-
-  Object.keys(products).forEach(c => {
-    t.innerHTML += `<button class="tab ${c === activeCategory ? "active" : ""}" onclick="setCategory('${c}')">${c}</button>`;
+function listenProducts() {
+  onSnapshot(collection(db, "products"), snap => {
+    products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderCategories();
+    renderProducts();
+    renderInventory();
+    renderProductsAdmin();
   });
 }
 
-function setCategory(c) {
-  activeCategory = c;
-  renderTabs();
+function listenUsers() {
+  onSnapshot(collection(db, "users"), snap => {
+    users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderUsersAdmin();
+  });
+}
+
+function listenSales() {
+  const q = query(collection(db, "sales"), orderBy("createdAtMs", "desc"));
+
+  onSnapshot(q, snap => {
+    sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderStats();
+  });
+}
+
+function renderCategories() {
+  const categories = ["Alle", ...new Set(products.filter(p => p.active).map(p => p.category))];
+
+  $("categoryButtons").innerHTML = categories.map(cat => `
+    <button class="${selectedCategory === cat ? "active-discount" : ""}" onclick="window.selectCategory('${cat}')">
+      ${cat}
+    </button>
+  `).join("");
+}
+
+window.selectCategory = function(cat) {
+  selectedCategory = cat;
+  renderCategories();
   renderProducts();
-}
+};
 
 function renderProducts() {
-  const grid = $("productGrid");
-  grid.innerHTML = "";
+  const visible = products.filter(p => p.active && (selectedCategory === "Alle" || p.category === selectedCategory));
 
-  (products[activeCategory] || []).forEach((item, index) => {
-    const id = productKey(activeCategory) + "_" + index;
-    const isMenu = item.menu;
+  $("productGrid").innerHTML = visible.map(p => `
+    <div class="product-card">
+      <div class="icon">${p.icon || "🍽️"}</div>
+      <h3>${p.name}</h3>
+      <small>${p.category}</small>
+      <p>${money(p.price)}</p>
+      <small>Lager: ${p.stock ?? 0}</small>
+      <br><br>
+      <button onclick="window.addToCart('${p.id}')">Hinzufügen</button>
+    </div>
+  `).join("");
+};
 
-    if (quantities[id] === undefined) quantities[id] = 0;
+window.addToCart = function(productId) {
+  const product = products.find(p => p.id === productId);
 
-    let stockHtml = "";
-    let choiceHtml = "";
+  if (!product) return;
 
-    if (isMenu) {
-      const r = MENU_RECIPES[item.menu];
+  const existing = cart.find(item => item.id === product.id);
 
-      stockHtml = `<div class="stock">Lager wird von Einzelprodukten abgezogen</div>`;
+  if (existing) {
+    existing.quantity += 1;
+  } else {
+    cart.push({
+      id: product.id,
+      name: product.name,
+      price: Number(product.price),
+      quantity: 1
+    });
+  }
 
-      if (r?.choices?.pizza) {
-        choiceHtml += `<select class="choice" id="choice-${id}-pizza">
-          ${r.choices.pizza.map(p => `<option value="${p}">${p}</option>`).join("")}
-        </select>`;
-      }
+  renderCart();
+};
 
-      if (r?.choices?.pasta) {
-        choiceHtml += `<select class="choice" id="choice-${id}-pasta">
-          ${r.choices.pasta.map(p => `<option value="${p}">${p}</option>`).join("")}
-        </select>`;
-      }
-    } else {
-      const key = productKey(item.name);
-      const stock = inventory[key] ?? 0;
-      stockHtml = `<div class="stock ${stock <= 10 ? "low" : ""}">Lager: ${stock}</div>`;
-    }
-
-    grid.innerHTML += `
-      <div class="product-card">
-        <div class="icon">${item.icon}</div>
-        <div class="pname">${item.name}</div>
-        <div class="price">${euro(item.price)}</div>
-
-        ${stockHtml}
-        ${choiceHtml}
-
-        <div class="qty-row">
-          <button onclick="changeQty('${id}', -10)">-10</button>
-          <button onclick="changeQty('${id}', -5)">-5</button>
-          <div class="qty" id="qty-${id}">${quantities[id]}</div>
-          <button onclick="changeQty('${id}', 5)">+5</button>
-          <button onclick="changeQty('${id}', 10)">+10</button>
+function renderCart() {
+  if (cart.length === 0) {
+    $("cartItems").innerHTML = "<p>Warenkorb leer</p>";
+  } else {
+    $("cartItems").innerHTML = cart.map(item => `
+      <div class="cart-item">
+        <div>
+          <b>${item.quantity}x ${item.name}</b><br>
+          <small>${money(item.price)} pro Stück</small><br>
+          <b>${money(item.price * item.quantity)}</b>
         </div>
-
-        <div class="plusminus">
-          <button onclick="changeQty('${id}', -1)">−</button>
-          <button onclick="changeQty('${id}', 1)">+</button>
+        <div class="cart-actions">
+          <button onclick="window.changeQty('${item.id}', -1)">-</button>
+          <button onclick="window.changeQty('${item.id}', 1)">+</button>
+          <button class="danger" onclick="window.removeCartItem('${item.id}')">X</button>
         </div>
-
-        <button class="add" onclick="addItem('${item.name}', ${item.price}, '${id}', '${item.menu || ""}', '${item.icon}')">
-          HINZUFÜGEN
-        </button>
       </div>
-    `;
-  });
-}
-
-function buildRecipe(menuCode, id) {
-  if (!menuCode) return null;
-
-  const r = MENU_RECIPES[menuCode];
-  const ingredients = [...(r.fixed || [])];
-  let choiceText = "";
-
-  if (r.choices?.pizza) {
-    const p = $(`choice-${id}-pizza`).value;
-    ingredients.push(p);
-    choiceText += ` | Pizza: ${p}`;
+    `).join("");
   }
 
-  if (r.choices?.pasta) {
-    const p = $(`choice-${id}-pasta`).value;
-    ingredients.push(p);
-    choiceText += ` | Pasta: ${p}`;
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const total = Math.round(subtotal * (1 - discount / 100));
+
+  $("subtotalLabel").textContent = money(subtotal);
+  $("discountLabel").textContent = `${discount} %`;
+  $("totalLabel").textContent = money(total);
+}
+
+window.changeQty = function(id, amount) {
+  const item = cart.find(i => i.id === id);
+  if (!item) return;
+
+  item.quantity += amount;
+
+  if (item.quantity <= 0) {
+    cart = cart.filter(i => i.id !== id);
   }
 
-  return { ingredients, choiceText };
-}
+  renderCart();
+};
 
-function changeQty(id, a) {
-  quantities[id] = Math.max(0, (quantities[id] || 0) + a);
-
-  const el = $("qty-" + id);
-  if (el) el.innerText = quantities[id];
-}
-
-function addItem(name, price, id, menuCode, icon) {
-  const qty = quantities[id] || 0;
-
-  if (qty <= 0) {
-    alert("Bitte Menge auswählen.");
-    return;
-  }
-
-  const r = buildRecipe(menuCode, id);
-
-  orders.push({
-    id: Date.now() + Math.random(),
-    name: name + (r ? r.choiceText : ""),
-    price,
-    qty,
-    icon,
-    ingredients: r ? r.ingredients : [name]
-  });
-
-  quantities[id] = 0;
-
-  const el = $("qty-" + id);
-  if (el) el.innerText = 0;
-
-  renderOrder();
-}
-
-function removeItem(id) {
-  orders = orders.filter(o => o.id !== id);
-  renderOrder();
-}
+window.removeCartItem = function(id) {
+  cart = cart.filter(i => i.id !== id);
+  renderCart();
+};
 
 function clearCart() {
-  if (confirm("Warenkorb wirklich leeren?")) {
-    orders = [];
-    discount = 0;
-    renderOrder();
-    renderDiscounts();
-  }
-}
-
-function setDiscount(v) {
-  if (!can(currentUser.role, "discount")) {
-    alert("Praktikanten dürfen keinen Rabatt geben.");
-    return;
-  }
-
-  discount = v;
-  renderOrder();
-  renderDiscounts();
-}
-
-function removeDiscount() {
+  cart = [];
   discount = 0;
-  renderOrder();
-  renderDiscounts();
+  renderDiscountButtons();
+  renderCart();
 }
 
-function renderDiscounts() {
-  const b = $("discountButtons");
-  b.innerHTML = "";
-
-  const ok = can(currentUser.role, "discount");
+function renderDiscountButtons() {
+  let html = "";
 
   for (let i = 5; i <= 100; i += 5) {
-    b.innerHTML += `<button class="${discount === i ? "active" : ""}" ${ok ? "" : "disabled"} onclick="setDiscount(${i})">${i}%</button>`;
+    html += `<button class="${discount === i ? "active-discount" : ""}" onclick="window.setDiscount(${i})">${i}%</button>`;
   }
 
-  b.innerHTML += `<button class="remove-discount" ${ok ? "" : "disabled"} onclick="removeDiscount()">Rabatt entfernen</button>`;
+  $("discountButtons").innerHTML = html;
 }
 
-function getSubtotal() {
-  return orders.reduce((s, o) => s + o.price * o.qty, 0);
-}
+window.setDiscount = function(value) {
+  discount = value;
+  renderDiscountButtons();
+  renderCart();
+};
 
-function getTotal() {
-  return Math.round(getSubtotal() - getSubtotal() * discount / 100);
-}
-
-function renderOrder() {
-  const list = $("cartList");
-  list.innerHTML = "";
-
-  if (orders.length === 0) {
-    list.innerHTML = `<div style="padding:18px;color:#b9a987;font-size:18px;">Keine Artikel im Warenkorb</div>`;
-  }
-
-  orders.forEach(i => {
-    list.innerHTML += `
-      <div class="cart-row">
-        <div class="cart-icon">${i.icon || "🍽️"}</div>
-        <div>${i.qty}x ${i.name}</div>
-        <div class="cart-price">${euro(i.price * i.qty)}</div>
-        <button class="remove" onclick="removeItem(${i.id})">×</button>
-      </div>
-    `;
-  });
-
-  $("totalValue").innerText = euro(getTotal());
-}
-
-function getNeededIngredients() {
-  const n = {};
-
-  orders.forEach(i => {
-    i.ingredients.forEach(x => {
-      const k = productKey(x);
-      n[k] = (n[k] || 0) + i.qty;
-    });
-  });
-
-  return n;
-}
-
-function checkInventoryLocal() {
-  const n = getNeededIngredients();
-
-  for (const k in n) {
-    if ((inventory[k] ?? 0) < n[k]) {
-      alert("Nicht genug Lagerbestand für: " + k.replaceAll("_", " "));
-      return false;
-    }
-  }
-
-  return true;
-}
-
-async function reduceInventory() {
-  const n = getNeededIngredients();
-
-  await runTransaction(db, async tx => {
-    const snap = await tx.get(inventoryRef);
-
-    if (!snap.exists()) throw new Error("Inventur-Dokument fehlt.");
-
-    const cur = snap.data();
-    const upd = { ...cur };
-
-    for (const k in n) {
-      const stock = cur[k] ?? 0;
-
-      if (stock < n[k]) throw new Error("Nicht genug Lagerbestand für: " + k);
-
-      upd[k] = stock - n[k];
-    }
-
-    tx.set(inventoryRef, upd);
-  });
-}
-
-async function finishOrder() {
-  if (!firebaseLoaded) {
-    alert("Firebase lädt noch.");
+async function checkout() {
+  if (cart.length === 0) {
+    alert("Warenkorb ist leer.");
     return;
   }
 
-  if (orders.length === 0) {
-    alert("Keine Bestellung vorhanden.");
-    return;
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const total = Math.round(subtotal * (1 - discount / 100));
+
+  for (const item of cart) {
+    const product = products.find(p => p.id === item.id);
+    if (!product) continue;
+
+    let amountToSubtract = item.quantity;
+
+    if (menuIngredients[item.name]) {
+      amountToSubtract = item.quantity;
+    }
+
+    const newStock = Math.max(0, Number(product.stock || 0) - amountToSubtract);
+    await updateDoc(doc(db, "products", product.id), { stock: newStock });
   }
 
-  if (!checkInventoryLocal()) return;
-
-  const sale = {
-    employee: currentUser.username,
-    role: currentUser.role,
+  await addDoc(collection(db, "sales"), {
+    items: cart,
+    subtotal,
     discount,
-    subtotal: getSubtotal(),
-    total: getTotal(),
-    items: orders.map(o => ({
-      name: o.name,
-      qty: o.qty,
-      price: o.price,
-      total: o.price * o.qty,
-      ingredients: o.ingredients
-    })),
-    date: new Date().toLocaleString("de-DE")
+    total,
+    user: currentUser.username,
+    role: currentUser.role,
+    createdAt: serverTimestamp(),
+    createdAtMs: Date.now()
+  });
+
+  await discordLog(
+    `🧾 Verkauf abgeschlossen von **${currentUser.username}**\n` +
+    `Artikel: ${cart.map(i => `${i.quantity}x ${i.name}`).join(", ")}\n` +
+    `Rabatt: ${discount}%\n` +
+    `Gesamt: **${money(total)}**`
+  );
+
+  clearCart();
+  alert("Verkauf abgeschlossen.");
+}
+
+async function saveProduct() {
+  if (!hasPower(3)) {
+    alert("Keine Berechtigung.");
+    return;
+  }
+
+  const name = $("productName").value.trim();
+  const category = $("productCategory").value.trim();
+  const price = Number($("productPrice").value);
+  const icon = $("productIcon").value.trim();
+  const stock = Number($("productStock").value);
+
+  if (!name || !category || !price) {
+    alert("Bitte Produktname, Kategorie und Preis eingeben.");
+    return;
+  }
+
+  const data = {
+    name,
+    category,
+    price,
+    icon: icon || "🍽️",
+    stock: stock || 0,
+    active: true,
+    updatedAt: serverTimestamp()
   };
 
-  try {
-    await reduceInventory();
-    await addDoc(collection(db, "sales"), { ...sale, createdAt: serverTimestamp() });
-    await sendDiscordLog(sale);
-
-    alert("Bestellung abgeschlossen.");
-
-    orders = [];
-    discount = 0;
-    renderOrder();
-    renderDiscounts();
-  } catch (e) {
-    alert(e.message || "Fehler beim Abschließen.");
-  }
-}
-
-async function sendDiscordLog(sale) {
-  if (!webhookURL || webhookURL === "DEIN_DISCORD_WEBHOOK_HIER_EINFÜGEN") return;
-
-  const text = sale.items.map(i => `${i.qty}x ${i.name} - ${euro(i.total)}`).join("\n");
-
-  await fetch(webhookURL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      embeds: [{
-        title: "🍷 Neue Bestellung - La Casa del Nonno",
-        color: 11141120,
-        description: text,
-        fields: [
-          { name: "Mitarbeiter", value: sale.employee, inline: true },
-          { name: "Rolle", value: sale.role, inline: true },
-          { name: "Rabatt", value: sale.discount + "%", inline: true },
-          { name: "Gesamt", value: euro(sale.total), inline: true }
-        ],
-        timestamp: new Date()
-      }]
-    })
-  });
-}
-
-function openInventory() {
-  if (!can(currentUser.role, "inventory")) {
-    alert("Keine Berechtigung für Inventur.");
-    return;
+  if (editingProductId) {
+    await updateDoc(doc(db, "products", editingProductId), data);
+    await discordLog(`✏️ Produkt bearbeitet: **${name}**`);
+  } else {
+    await addDoc(collection(db, "products"), {
+      ...data,
+      createdAt: serverTimestamp()
+    });
+    await discordLog(`➕ Produkt hinzugefügt: **${name}**`);
   }
 
-  renderInventory();
-  $("inventoryModal").classList.remove("hidden");
+  editingProductId = null;
+  $("addProductBtn").textContent = "Produkt speichern";
+  clearProductForm();
 }
 
-function closeModal(id) {
-  $(id).classList.add("hidden");
+function renderProductsAdmin() {
+  $("productsAdminList").innerHTML = products.map(p => `
+    <div class="admin-item">
+      <div>
+        <b>${p.icon || "🍽️"} ${p.name}</b><br>
+        Kategorie: ${p.category}<br>
+        Preis: ${money(p.price)}<br>
+        Lager: ${p.stock ?? 0}<br>
+        Status: ${p.active ? "Aktiv" : "Inaktiv"}
+      </div>
+      <div class="admin-buttons">
+        <button onclick="window.editProduct('${p.id}')">Bearbeiten</button>
+        <button onclick="window.toggleProduct('${p.id}')">${p.active ? "Deaktivieren" : "Aktivieren"}</button>
+        <button class="danger" onclick="window.deleteProduct('${p.id}')">Löschen</button>
+      </div>
+    </div>
+  `).join("");
 }
 
-function renderInventoryIfOpen() {
-  if (!$("inventoryModal").classList.contains("hidden")) renderInventory();
+window.editProduct = function(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+
+  editingProductId = id;
+  $("productName").value = p.name;
+  $("productCategory").value = p.category;
+  $("productPrice").value = p.price;
+  $("productIcon").value = p.icon;
+  $("productStock").value = p.stock;
+  $("addProductBtn").textContent = "Produkt ändern";
+};
+
+window.toggleProduct = async function(id) {
+  const p = products.find(x => x.id === id);
+  await updateDoc(doc(db, "products", id), { active: !p.active });
+};
+
+window.deleteProduct = async function(id) {
+  if (!confirm("Produkt wirklich löschen?")) return;
+  await deleteDoc(doc(db, "products", id));
+};
+
+function clearProductForm() {
+  $("productName").value = "";
+  $("productCategory").value = "";
+  $("productPrice").value = "";
+  $("productIcon").value = "";
+  $("productStock").value = "";
 }
 
 function renderInventory() {
-  const list = $("inventoryList");
-  list.innerHTML = "";
-
-  Object.values(products).flat().forEach(item => {
-    if (item.menu) return;
-
-    const k = productKey(item.name);
-
-    list.innerHTML += `
-      <div class="inventory-row">
-        <div>${item.icon} ${item.name}</div>
-        <input type="number" min="0" value="${inventory[k] ?? 0}" id="inv-${k}">
+  $("inventoryList").innerHTML = products.map(p => `
+    <div class="admin-item">
+      <div>
+        <b>${p.name}</b><br>
+        Lager: ${p.stock ?? 0}
       </div>
-    `;
-  });
+      <div class="admin-buttons">
+        <button onclick="window.changeStock('${p.id}', -1)">-1</button>
+        <button onclick="window.changeStock('${p.id}', 1)">+1</button>
+        <button onclick="window.changeStock('${p.id}', 10)">+10</button>
+      </div>
+    </div>
+  `).join("");
 }
 
-async function saveInventory() {
-  if (!can(currentUser.role, "inventory")) return;
+window.changeStock = async function(id, amount) {
+  if (!hasPower(2)) {
+    alert("Keine Berechtigung.");
+    return;
+  }
 
-  const ni = { ...inventory };
+  const p = products.find(x => x.id === id);
+  const newStock = Math.max(0, Number(p.stock || 0) + amount);
 
-  Object.values(products).flat().forEach(item => {
-    if (item.menu) return;
+  await updateDoc(doc(db, "products", id), { stock: newStock });
+  await discordLog(`📦 Lager geändert: **${p.name}** jetzt ${newStock}`);
+};
 
-    const k = productKey(item.name);
-    const v = parseInt($("inv-" + k).value);
+async function saveUser() {
+  if (!hasPower(4)) {
+    alert("Nur Geschäftsführer darf Mitarbeiter verwalten.");
+    return;
+  }
 
-    ni[k] = isNaN(v) ? 0 : v;
-  });
+  const username = $("newUsername").value.trim();
+  const password = $("newPassword").value.trim();
+  const role = $("newRole").value;
 
-  await setDoc(inventoryRef, ni);
+  if (!username || !password || !role) {
+    alert("Bitte Benutzername, Passwort und Rolle eingeben.");
+    return;
+  }
 
-  alert("Inventur gespeichert.");
-  closeModal("inventoryModal");
+  await setDoc(doc(db, "users", username), {
+    username,
+    password,
+    role,
+    active: true,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  await discordLog(`👤 Mitarbeiter gespeichert: **${username}** (${role})`);
+
+  editingUserId = null;
+  clearUserForm();
 }
 
-async function openStats() {
-  if (!can(currentUser.role, "stats")) return;
+function renderUsersAdmin() {
+  $("usersAdminList").innerHTML = users.map(u => `
+    <div class="admin-item">
+      <div>
+        <b>${u.username}</b><br>
+        Rolle: ${u.role}<br>
+        Status: ${u.active ? "Aktiv" : "Inaktiv"}
+      </div>
+      <div class="admin-buttons">
+        <button onclick="window.editUser('${u.username}')">Bearbeiten</button>
+        <button onclick="window.toggleUser('${u.username}')">${u.active ? "Deaktivieren" : "Aktivieren"}</button>
+        ${u.username !== "admin" ? `<button class="danger" onclick="window.deleteUser('${u.username}')">Löschen</button>` : ""}
+      </div>
+    </div>
+  `).join("");
+}
 
-  const snap = await getDocs(collection(db, "sales"));
-  const sales = [];
+window.editUser = function(username) {
+  const u = users.find(x => x.username === username);
+  if (!u) return;
 
-  snap.forEach(d => sales.push(d.data()));
+  editingUserId = username;
+  $("newUsername").value = u.username;
+  $("newUsername").disabled = true;
+  $("newPassword").value = u.password;
+  $("newRole").value = u.role;
+};
 
-  const total = sales.reduce((s, x) => s + (x.total || 0), 0);
-  const count = sales.length;
-  const byUser = {};
+window.toggleUser = async function(username) {
+  if (username === "admin") {
+    alert("Admin kann nicht deaktiviert werden.");
+    return;
+  }
 
-  sales.forEach(s => {
-    byUser[s.employee] = (byUser[s.employee] || 0) + (s.total || 0);
+  const u = users.find(x => x.username === username);
+  await updateDoc(doc(db, "users", username), { active: !u.active });
+};
+
+window.deleteUser = async function(username) {
+  if (username === "admin") return;
+  if (!confirm("Mitarbeiter wirklich löschen?")) return;
+
+  await deleteDoc(doc(db, "users", username));
+};
+
+function clearUserForm() {
+  $("newUsername").value = "";
+  $("newUsername").disabled = false;
+  $("newPassword").value = "";
+  $("newRole").value = "Mitarbeiter";
+}
+
+function renderStats() {
+  const today = new Date().toDateString();
+
+  const todaySalesArr = sales.filter(s => new Date(s.createdAtMs).toDateString() === today);
+  const todayRevenueSum = todaySalesArr.reduce((sum, s) => sum + Number(s.total || 0), 0);
+  const totalRevenueSum = sales.reduce((sum, s) => sum + Number(s.total || 0), 0);
+
+  $("todayRevenue").textContent = money(todayRevenueSum);
+  $("todaySales").textContent = todaySalesArr.length;
+  $("totalRevenue").textContent = money(totalRevenueSum);
+  $("totalSales").textContent = sales.length;
+
+  $("salesList").innerHTML = sales.slice(0, 30).map(s => `
+    <div class="admin-item">
+      <div>
+        <b>${money(s.total)}</b><br>
+        Mitarbeiter: ${s.user}<br>
+        Rabatt: ${s.discount}%<br>
+        Artikel: ${s.items.map(i => `${i.quantity}x ${i.name}`).join(", ")}<br>
+        Datum: ${new Date(s.createdAtMs).toLocaleString("de-DE")}
+      </div>
+    </div>
+  `).join("");
+}
+
+async function dailyClose() {
+  const today = new Date().toDateString();
+  const todaySalesArr = sales.filter(s => new Date(s.createdAtMs).toDateString() === today);
+  const revenue = todaySalesArr.reduce((sum, s) => sum + Number(s.total || 0), 0);
+
+  const text =
+    `Tagesabschluss\n\n` +
+    `Datum: ${new Date().toLocaleDateString("de-DE")}\n` +
+    `Verkäufe: ${todaySalesArr.length}\n` +
+    `Umsatz: ${money(revenue)}\n` +
+    `Erstellt von: ${currentUser.username}`;
+
+  $("dailyCloseResult").textContent = text;
+
+  await addDoc(collection(db, "dailyClosings"), {
+    date: new Date().toLocaleDateString("de-DE"),
+    salesCount: todaySalesArr.length,
+    revenue,
+    user: currentUser.username,
+    createdAt: serverTimestamp(),
+    createdAtMs: Date.now()
   });
 
-  let html = `
-    <div class="stat-line"><b>Anzahl Bestellungen:</b> ${count}</div>
-    <div class="stat-line"><b>Gesamtumsatz:</b> ${euro(total)}</div>
-    <h3>Umsatz pro Mitarbeiter</h3>
-  `;
+  await discordLog(`📊 **Tagesabschluss**\n${text}`);
+}
 
-  Object.entries(byUser)
-    .sort((a, b) => b[1] - a[1])
-    .forEach(([u, v]) => {
-      html += `<div class="stat-line">${u}: ${euro(v)}</div>`;
+async function discordLog(message) {
+  if (!DISCORD_WEBHOOK_URL || DISCORD_WEBHOOK_URL.includes("DEIN_NEUER")) return;
+
+  try {
+    await fetch(DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        username: "La Casa del Nonno Kassensystem",
+        content: message
+      })
     });
-
-  $("statsContent").innerHTML = html;
-  $("statsModal").classList.remove("hidden");
+  } catch (err) {
+    console.error("Discord Webhook Fehler:", err);
+  }
 }
 
-function updateClock() {
-  const n = new Date();
-
-  $("clockTime").innerText = n.toLocaleTimeString("de-DE", {
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-
-  $("clockDate").innerText = n.toLocaleDateString("de-DE");
+function money(value) {
+  return `${Number(value || 0).toLocaleString("de-DE")} €`;
 }
 
-$("loginBtn").addEventListener("click", handleLogin);
-
-$("loginPassword").addEventListener("keydown", e => {
-  if (e.key === "Enter") handleLogin();
-});
-
-$("logoutBtn").addEventListener("click", () => {
-  logout();
-  location.reload();
-});
-
-$("clearCartBtn").addEventListener("click", clearCart);
-$("checkoutBtn").addEventListener("click", finishOrder);
-$("inventoryBtn").addEventListener("click", openInventory);
-$("saveInventoryBtn").addEventListener("click", saveInventory);
-$("statsBtn").addEventListener("click", openStats);
-
-if ($("adminBtn")) {
-  $("adminBtn").style.display = "none";
-}
-
-document.querySelectorAll("[data-close]").forEach(btn => {
-  btn.addEventListener("click", () => closeModal(btn.dataset.close));
-});
-
-window.setCategory = setCategory;
-window.changeQty = changeQty;
-window.addItem = addItem;
-window.removeItem = removeItem;
-window.setDiscount = setDiscount;
-window.removeDiscount = removeDiscount;
-
-updateClock();
-setInterval(updateClock, 1000);
-
-const user = restoreUser();
-
-if (user) showApp(user);
-else showLogin();
+boot();
