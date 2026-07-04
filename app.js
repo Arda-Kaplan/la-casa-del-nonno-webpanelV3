@@ -28,7 +28,6 @@ let cart = [];
 let selectedCategory = "Alle";
 let discount = 0;
 let editingProductId = null;
-let editingUserId = null;
 
 const rolePower = {
   "Geschäftsführer": 4,
@@ -38,27 +37,52 @@ const rolePower = {
 };
 
 const defaultProducts = [
-  { name: "Cola", category: "Getränke", price: 130, icon: "🥤", stock: 100 },
-  { name: "Tè Freddo al Limone", category: "Getränke", price: 195, icon: "🥤", stock: 100 },
-  { name: "Energy Drink", category: "Getränke", price: 200, icon: "⚡", stock: 100 },
-  { name: "Vino della Casa", category: "Getränke", price: 350, icon: "🍷", stock: 100 },
+  { name: "Vino della Casa", category: "Getränke", price: 350, icon: "🍷", stock: 1370 },
+  { name: "Tè Freddo al Limone", category: "Getränke", price: 195, icon: "🍹", stock: 1205 },
+  { name: "Cola", category: "Getränke", price: 130, icon: "🥤", stock: 1038 },
+  { name: "Energy Drink", category: "Getränke", price: 200, icon: "⚡", stock: 1986 },
+  { name: "Kaffee", category: "Getränke", price: 190, icon: "☕", stock: 1670 },
+  { name: "Espresso", category: "Getränke", price: 190, icon: "☕", stock: 1446 },
+  { name: "Acqua Naturale", category: "Getränke", price: 120, icon: "💧", stock: 1880 },
+  { name: "Acqua Frizzante", category: "Getränke", price: 120, icon: "🍾", stock: 1880 },
+  { name: "Succo d’Arancia", category: "Getränke", price: 180, icon: "🍊", stock: 1450 },
+  { name: "Limonata", category: "Getränke", price: 170, icon: "🍋", stock: 1320 },
+
   { name: "Pizza Margherita", category: "Pizza", price: 330, icon: "🍕", stock: 100 },
   { name: "Pizza Salame", category: "Pizza", price: 330, icon: "🍕", stock: 100 },
   { name: "Pizza Tonno", category: "Pizza", price: 330, icon: "🍕", stock: 100 },
+
+  { name: "Antipasto Italiano della Casa", category: "Antipasti", price: 110, icon: "🥗", stock: 100 },
+  { name: "Bruschetta", category: "Antipasti", price: 165, icon: "🥖", stock: 100 },
+
   { name: "Pasta Carbonara", category: "Pasta", price: 300, icon: "🍝", stock: 100 },
   { name: "Pasta Bolognese", category: "Pasta", price: 300, icon: "🍝", stock: 100 },
   { name: "Lasagna", category: "Pasta", price: 550, icon: "🍝", stock: 100 },
+  { name: "Grigliata Mista di Pesce", category: "Pasta", price: 410, icon: "🐟", stock: 100 },
+
   { name: "Tiramisu", category: "Dessert", price: 300, icon: "🍰", stock: 100 },
   { name: "Panna Cotta", category: "Dessert", price: 300, icon: "🍮", stock: 100 },
-  { name: "Menü 1", category: "Menüs", price: 540, icon: "🍽️", stock: 100 },
-  { name: "Menü 2", category: "Menüs", price: 600, icon: "🍽️", stock: 100 },
-  { name: "Menü 3", category: "Menüs", price: 860, icon: "🍽️", stock: 100 }
+  { name: "Coppa Gelato della Casa", category: "Dessert", price: 300, icon: "🍨", stock: 100 },
+
+  { name: "Menü 1", category: "Menüs", price: 540, icon: "⭐", stock: 100 },
+  { name: "Menü 2", category: "Menüs", price: 600, icon: "⭐", stock: 100 },
+  { name: "Menü 3", category: "Menüs", price: 860, icon: "⭐", stock: 100 }
 ];
 
 const menuIngredients = {
   "Menü 1": ["Tè Freddo al Limone", "Pizza Margherita", "Panna Cotta"],
   "Menü 2": ["Cola", "Pasta Carbonara", "Tiramisu"],
-  "Menü 3": ["Energy Drink"]
+  "Menü 3": ["Energy Drink", "Grigliata Mista di Pesce", "Coppa Gelato della Casa"]
+};
+
+const categoryIcons = {
+  "Alle": "🍽️",
+  "Getränke": "🍷",
+  "Pizza": "🍕",
+  "Antipasti": "🥗",
+  "Pasta": "🍝",
+  "Dessert": "🍨",
+  "Menüs": "⭐"
 };
 
 const $ = id => document.getElementById(id);
@@ -67,11 +91,14 @@ $("loginBtn").addEventListener("click", login);
 $("logoutBtn").addEventListener("click", logout);
 $("checkoutBtn").addEventListener("click", checkout);
 $("clearCartBtn").addEventListener("click", clearCart);
+$("inventoryQuickBtn").addEventListener("click", () => switchPage("inventoryPage"));
+
 $("removeDiscountBtn").addEventListener("click", () => {
   discount = 0;
   renderDiscountButtons();
   renderCart();
 });
+
 $("addProductBtn").addEventListener("click", saveProduct);
 $("addUserBtn").addEventListener("click", saveUser);
 $("dailyCloseBtn").addEventListener("click", dailyClose);
@@ -89,8 +116,12 @@ $("loginPassword").addEventListener("keydown", e => {
 });
 
 async function boot() {
+  updateClock();
+  setInterval(updateClock, 1000);
+
   await ensureDefaultAdmin();
   await ensureDefaultProducts();
+
   listenProducts();
   listenUsers();
   listenSales();
@@ -116,9 +147,9 @@ async function ensureDefaultProducts() {
   const snap = await getDocs(collection(db, "products"));
 
   if (snap.empty) {
-    for (const p of defaultProducts) {
+    for (const product of defaultProducts) {
       await addDoc(collection(db, "products"), {
-        ...p,
+        ...product,
         active: true,
         createdAt: serverTimestamp()
       });
@@ -147,32 +178,40 @@ async function login() {
 
   const user = snap.data();
 
-  if (!user.active) {
+  if (user.active === false) {
     $("loginError").textContent = "Dieser Benutzer ist deaktiviert.";
     return;
   }
 
-  if (user.password !== password) {
+  if (String(user.password) !== String(password)) {
     $("loginError").textContent = "Passwort falsch.";
     return;
   }
 
-  currentUser = user;
+  currentUser = {
+    username: user.username || username,
+    password: user.password,
+    role: user.role || "Mitarbeiter",
+    active: user.active !== false
+  };
+
   $("loginScreen").classList.add("hidden");
   $("appScreen").classList.remove("hidden");
-  $("currentUserLabel").textContent = `${user.username} | ${user.role}`;
+  $("currentUserLabel").textContent = `${currentUser.username} · ${currentUser.role}`;
 
   applyRoleVisibility();
-  await discordLog(`✅ Login: **${user.username}** (${user.role})`);
+  await discordLog(`✅ Login: **${currentUser.username}** (${currentUser.role})`);
 }
 
 function logout() {
   currentUser = null;
   cart = [];
   discount = 0;
+
   $("loginScreen").classList.remove("hidden");
   $("appScreen").classList.add("hidden");
   $("loginPassword").value = "";
+
   renderCart();
 }
 
@@ -184,6 +223,7 @@ function applyRoleVisibility() {
   document.querySelector('[data-page="inventoryPage"]').style.display = power >= 2 ? "block" : "none";
   document.querySelector('[data-page="statsPage"]').style.display = power >= 3 ? "block" : "none";
   document.querySelector('[data-page="closingPage"]').style.display = power >= 3 ? "block" : "none";
+  $("inventoryQuickBtn").style.display = power >= 2 ? "block" : "none";
 }
 
 function hasPower(minRole) {
@@ -191,16 +231,18 @@ function hasPower(minRole) {
 }
 
 function switchPage(pageId) {
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active-page"));
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".page").forEach(page => page.classList.remove("active-page"));
+  document.querySelectorAll(".tab").forEach(tab => tab.classList.remove("active"));
 
   $(pageId).classList.add("active-page");
-  document.querySelector(`[data-page="${pageId}"]`).classList.add("active");
+
+  const tab = document.querySelector(`[data-page="${pageId}"]`);
+  if (tab) tab.classList.add("active");
 }
 
 function listenProducts() {
-  onSnapshot(collection(db, "products"), snap => {
-    products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  onSnapshot(collection(db, "products"), snapshot => {
+    products = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     renderCategories();
     renderProducts();
     renderInventory();
@@ -209,67 +251,118 @@ function listenProducts() {
 }
 
 function listenUsers() {
-  onSnapshot(collection(db, "users"), snap => {
-    users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  onSnapshot(collection(db, "users"), snapshot => {
+    users = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     renderUsersAdmin();
   });
 }
 
 function listenSales() {
-  const q = query(collection(db, "sales"), orderBy("createdAtMs", "desc"));
+  const salesQuery = query(collection(db, "sales"), orderBy("createdAtMs", "desc"));
 
-  onSnapshot(q, snap => {
-    sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  onSnapshot(salesQuery, snapshot => {
+    sales = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     renderStats();
   });
 }
 
 function renderCategories() {
-  const categories = ["Alle", ...new Set(products.filter(p => p.active).map(p => p.category))];
+  const categories = ["Alle", ...new Set(products.filter(p => p.active !== false).map(p => p.category || "Sonstiges"))];
 
-  $("categoryButtons").innerHTML = categories.map(cat => `
-    <button class="${selectedCategory === cat ? "active-discount" : ""}" onclick="window.selectCategory('${cat}')">
-      ${cat}
+  $("categoryButtons").innerHTML = categories.map(category => `
+    <button class="${selectedCategory === category ? "active-discount" : ""}" data-category="${escapeHtml(category)}">
+      ${categoryIcons[category] || "🍽️"} ${escapeHtml(category)}
     </button>
+  `).join("");
+
+  document.querySelectorAll("[data-category]").forEach(button => {
+    button.addEventListener("click", () => {
+      selectedCategory = button.dataset.category;
+      renderCategories();
+      renderProducts();
+    });
+  });
+}
+
+function renderProducts() {
+  const visibleProducts = products.filter(product => {
+    const active = product.active !== false;
+    const categoryMatch = selectedCategory === "Alle" || product.category === selectedCategory;
+    return active && categoryMatch;
+  });
+
+  $("productGrid").innerHTML = visibleProducts.map(product => `
+    <div class="product-card">
+      <div class="icon">${escapeHtml(product.icon || "🍽️")}</div>
+      <h3>${escapeHtml(product.name)}</h3>
+      <div class="product-price">${money(product.price)}</div>
+      <div class="product-stock">Lager: ${Number(product.stock || 0)}</div>
+
+      <div class="quick-row">
+        <button onclick="window.quickStock('${product.id}', -10)">-10</button>
+        <button onclick="window.quickStock('${product.id}', -5)">-5</button>
+        <button>0</button>
+        <button onclick="window.quickStock('${product.id}', 5)">+5</button>
+        <button onclick="window.quickStock('${product.id}', 10)">+10</button>
+      </div>
+
+      <div class="qty-row">
+        <button onclick="window.changeProductCart('${product.id}', -1)">−</button>
+        <button onclick="window.addToCart('${product.id}')">+</button>
+      </div>
+
+      <button class="add-btn" onclick="window.addToCart('${product.id}')">Hinzufügen</button>
+    </div>
   `).join("");
 }
 
-window.selectCategory = function(cat) {
-  selectedCategory = cat;
-  renderCategories();
-  renderProducts();
+window.quickStock = async function(productId, amount) {
+  if (!hasPower(2)) {
+    alert("Keine Berechtigung für Lageränderung.");
+    return;
+  }
+
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+
+  const newStock = Math.max(0, Number(product.stock || 0) + amount);
+  await updateDoc(doc(db, "products", productId), { stock: newStock });
+  await discordLog(`📦 Lager geändert: **${product.name}** jetzt ${newStock}`);
 };
 
-function renderProducts() {
-  const visible = products.filter(p => p.active && (selectedCategory === "Alle" || p.category === selectedCategory));
+window.changeProductCart = function(productId, amount) {
+  if (amount > 0) {
+    window.addToCart(productId);
+    return;
+  }
 
-  $("productGrid").innerHTML = visible.map(p => `
-    <div class="product-card">
-      <div class="icon">${p.icon || "🍽️"}</div>
-      <h3>${p.name}</h3>
-      <small>${p.category}</small>
-      <p>${money(p.price)}</p>
-      <small>Lager: ${p.stock ?? 0}</small>
-      <br><br>
-      <button onclick="window.addToCart('${p.id}')">Hinzufügen</button>
-    </div>
-  `).join("");
+  const item = cart.find(cartItem => cartItem.id === productId);
+
+  if (!item) return;
+
+  item.quantity -= 1;
+
+  if (item.quantity <= 0) {
+    cart = cart.filter(cartItem => cartItem.id !== productId);
+  }
+
+  renderCart();
 };
 
 window.addToCart = function(productId) {
   const product = products.find(p => p.id === productId);
-
   if (!product) return;
 
-  const existing = cart.find(item => item.id === product.id);
+  const existingItem = cart.find(item => item.id === product.id);
 
-  if (existing) {
-    existing.quantity += 1;
+  if (existingItem) {
+    existingItem.quantity += 1;
   } else {
     cart.push({
       id: product.id,
       name: product.name,
-      price: Number(product.price),
+      price: Number(product.price || 0),
+      icon: product.icon || "🍽️",
       quantity: 1
     });
   }
@@ -279,25 +372,19 @@ window.addToCart = function(productId) {
 
 function renderCart() {
   if (cart.length === 0) {
-    $("cartItems").innerHTML = "<p>Warenkorb leer</p>";
+    $("cartItems").innerHTML = `<div class="cart-item"><div></div><div class="cart-name">Warenkorb leer</div><div></div><div></div></div>`;
   } else {
     $("cartItems").innerHTML = cart.map(item => `
       <div class="cart-item">
-        <div>
-          <b>${item.quantity}x ${item.name}</b><br>
-          <small>${money(item.price)} pro Stück</small><br>
-          <b>${money(item.price * item.quantity)}</b>
-        </div>
-        <div class="cart-actions">
-          <button onclick="window.changeQty('${item.id}', -1)">-</button>
-          <button onclick="window.changeQty('${item.id}', 1)">+</button>
-          <button class="danger" onclick="window.removeCartItem('${item.id}')">X</button>
-        </div>
+        <div class="cart-icon">${escapeHtml(item.icon || "🍽️")}</div>
+        <div class="cart-name">${item.quantity}x ${escapeHtml(item.name)}</div>
+        <div class="cart-price">${money(item.price * item.quantity)}</div>
+        <button class="cart-remove" onclick="window.removeCartItem('${item.id}')">×</button>
       </div>
     `).join("");
   }
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
   const total = Math.round(subtotal * (1 - discount / 100));
 
   $("subtotalLabel").textContent = money(subtotal);
@@ -306,20 +393,20 @@ function renderCart() {
 }
 
 window.changeQty = function(id, amount) {
-  const item = cart.find(i => i.id === id);
+  const item = cart.find(cartItem => cartItem.id === id);
   if (!item) return;
 
   item.quantity += amount;
 
   if (item.quantity <= 0) {
-    cart = cart.filter(i => i.id !== id);
+    cart = cart.filter(cartItem => cartItem.id !== id);
   }
 
   renderCart();
 };
 
 window.removeCartItem = function(id) {
-  cart = cart.filter(i => i.id !== id);
+  cart = cart.filter(item => item.id !== id);
   renderCart();
 };
 
@@ -352,21 +439,11 @@ async function checkout() {
     return;
   }
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
   const total = Math.round(subtotal * (1 - discount / 100));
 
   for (const item of cart) {
-    const product = products.find(p => p.id === item.id);
-    if (!product) continue;
-
-    let amountToSubtract = item.quantity;
-
-    if (menuIngredients[item.name]) {
-      amountToSubtract = item.quantity;
-    }
-
-    const newStock = Math.max(0, Number(product.stock || 0) - amountToSubtract);
-    await updateDoc(doc(db, "products", product.id), { stock: newStock });
+    await subtractStockForSale(item);
   }
 
   await addDoc(collection(db, "sales"), {
@@ -382,13 +459,34 @@ async function checkout() {
 
   await discordLog(
     `🧾 Verkauf abgeschlossen von **${currentUser.username}**\n` +
-    `Artikel: ${cart.map(i => `${i.quantity}x ${i.name}`).join(", ")}\n` +
+    `Artikel: ${cart.map(item => `${item.quantity}x ${item.name}`).join(", ")}\n` +
     `Rabatt: ${discount}%\n` +
     `Gesamt: **${money(total)}**`
   );
 
   clearCart();
   alert("Verkauf abgeschlossen.");
+}
+
+async function subtractStockForSale(item) {
+  const soldProduct = products.find(product => product.id === item.id);
+
+  if (soldProduct) {
+    const newStock = Math.max(0, Number(soldProduct.stock || 0) - Number(item.quantity || 0));
+    await updateDoc(doc(db, "products", soldProduct.id), { stock: newStock });
+  }
+
+  const ingredients = menuIngredients[item.name];
+
+  if (!ingredients) return;
+
+  for (const ingredientName of ingredients) {
+    const ingredientProduct = products.find(product => product.name === ingredientName);
+    if (!ingredientProduct) continue;
+
+    const newIngredientStock = Math.max(0, Number(ingredientProduct.stock || 0) - Number(item.quantity || 0));
+    await updateDoc(doc(db, "products", ingredientProduct.id), { stock: newIngredientStock });
+  }
 }
 
 async function saveProduct() {
@@ -435,40 +533,42 @@ async function saveProduct() {
 }
 
 function renderProductsAdmin() {
-  $("productsAdminList").innerHTML = products.map(p => `
+  $("productsAdminList").innerHTML = products.map(product => `
     <div class="admin-item">
       <div>
-        <b>${p.icon || "🍽️"} ${p.name}</b><br>
-        Kategorie: ${p.category}<br>
-        Preis: ${money(p.price)}<br>
-        Lager: ${p.stock ?? 0}<br>
-        Status: ${p.active ? "Aktiv" : "Inaktiv"}
+        <b>${escapeHtml(product.icon || "🍽️")} ${escapeHtml(product.name)}</b><br>
+        Kategorie: ${escapeHtml(product.category || "-")}<br>
+        Preis: ${money(product.price)}<br>
+        Lager: ${Number(product.stock || 0)}<br>
+        Status: ${product.active !== false ? "Aktiv" : "Inaktiv"}
       </div>
       <div class="admin-buttons">
-        <button onclick="window.editProduct('${p.id}')">Bearbeiten</button>
-        <button onclick="window.toggleProduct('${p.id}')">${p.active ? "Deaktivieren" : "Aktivieren"}</button>
-        <button class="danger" onclick="window.deleteProduct('${p.id}')">Löschen</button>
+        <button onclick="window.editProduct('${product.id}')">Bearbeiten</button>
+        <button onclick="window.toggleProduct('${product.id}')">${product.active !== false ? "Deaktivieren" : "Aktivieren"}</button>
+        <button class="danger" onclick="window.deleteProduct('${product.id}')">Löschen</button>
       </div>
     </div>
   `).join("");
 }
 
 window.editProduct = function(id) {
-  const p = products.find(x => x.id === id);
-  if (!p) return;
+  const product = products.find(p => p.id === id);
+  if (!product) return;
 
   editingProductId = id;
-  $("productName").value = p.name;
-  $("productCategory").value = p.category;
-  $("productPrice").value = p.price;
-  $("productIcon").value = p.icon;
-  $("productStock").value = p.stock;
+  $("productName").value = product.name || "";
+  $("productCategory").value = product.category || "";
+  $("productPrice").value = product.price || "";
+  $("productIcon").value = product.icon || "";
+  $("productStock").value = product.stock || "";
   $("addProductBtn").textContent = "Produkt ändern";
 };
 
 window.toggleProduct = async function(id) {
-  const p = products.find(x => x.id === id);
-  await updateDoc(doc(db, "products", id), { active: !p.active });
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+
+  await updateDoc(doc(db, "products", id), { active: product.active === false });
 };
 
 window.deleteProduct = async function(id) {
@@ -485,33 +585,24 @@ function clearProductForm() {
 }
 
 function renderInventory() {
-  $("inventoryList").innerHTML = products.map(p => `
+  $("inventoryList").innerHTML = products.map(product => `
     <div class="admin-item">
       <div>
-        <b>${p.name}</b><br>
-        Lager: ${p.stock ?? 0}
+        <b>${escapeHtml(product.icon || "🍽️")} ${escapeHtml(product.name)}</b><br>
+        Kategorie: ${escapeHtml(product.category || "-")}<br>
+        Lager: ${Number(product.stock || 0)}
       </div>
       <div class="admin-buttons">
-        <button onclick="window.changeStock('${p.id}', -1)">-1</button>
-        <button onclick="window.changeStock('${p.id}', 1)">+1</button>
-        <button onclick="window.changeStock('${p.id}', 10)">+10</button>
+        <button onclick="window.quickStock('${product.id}', -10)">-10</button>
+        <button onclick="window.quickStock('${product.id}', -5)">-5</button>
+        <button onclick="window.quickStock('${product.id}', -1)">-1</button>
+        <button onclick="window.quickStock('${product.id}', 1)">+1</button>
+        <button onclick="window.quickStock('${product.id}', 5)">+5</button>
+        <button onclick="window.quickStock('${product.id}', 10)">+10</button>
       </div>
     </div>
   `).join("");
 }
-
-window.changeStock = async function(id, amount) {
-  if (!hasPower(2)) {
-    alert("Keine Berechtigung.");
-    return;
-  }
-
-  const p = products.find(x => x.id === id);
-  const newStock = Math.max(0, Number(p.stock || 0) + amount);
-
-  await updateDoc(doc(db, "products", id), { stock: newStock });
-  await discordLog(`📦 Lager geändert: **${p.name}** jetzt ${newStock}`);
-};
 
 async function saveUser() {
   if (!hasPower(4)) {
@@ -537,37 +628,34 @@ async function saveUser() {
   }, { merge: true });
 
   await discordLog(`👤 Mitarbeiter gespeichert: **${username}** (${role})`);
-
-  editingUserId = null;
   clearUserForm();
 }
 
 function renderUsersAdmin() {
-  $("usersAdminList").innerHTML = users.map(u => `
+  $("usersAdminList").innerHTML = users.map(user => `
     <div class="admin-item">
       <div>
-        <b>${u.username}</b><br>
-        Rolle: ${u.role}<br>
-        Status: ${u.active ? "Aktiv" : "Inaktiv"}
+        <b>${escapeHtml(user.username || user.id)}</b><br>
+        Rolle: ${escapeHtml(user.role || "Mitarbeiter")}<br>
+        Status: ${user.active === false ? "Inaktiv" : "Aktiv"}
       </div>
       <div class="admin-buttons">
-        <button onclick="window.editUser('${u.username}')">Bearbeiten</button>
-        <button onclick="window.toggleUser('${u.username}')">${u.active ? "Deaktivieren" : "Aktivieren"}</button>
-        ${u.username !== "admin" ? `<button class="danger" onclick="window.deleteUser('${u.username}')">Löschen</button>` : ""}
+        <button onclick="window.editUser('${user.username || user.id}')">Bearbeiten</button>
+        <button onclick="window.toggleUser('${user.username || user.id}')">${user.active === false ? "Aktivieren" : "Deaktivieren"}</button>
+        ${(user.username || user.id) !== "admin" ? `<button class="danger" onclick="window.deleteUser('${user.username || user.id}')">Löschen</button>` : ""}
       </div>
     </div>
   `).join("");
 }
 
 window.editUser = function(username) {
-  const u = users.find(x => x.username === username);
-  if (!u) return;
+  const user = users.find(u => (u.username || u.id) === username);
+  if (!user) return;
 
-  editingUserId = username;
-  $("newUsername").value = u.username;
+  $("newUsername").value = user.username || user.id;
   $("newUsername").disabled = true;
-  $("newPassword").value = u.password;
-  $("newRole").value = u.role;
+  $("newPassword").value = user.password || "";
+  $("newRole").value = user.role || "Mitarbeiter";
 };
 
 window.toggleUser = async function(username) {
@@ -576,8 +664,10 @@ window.toggleUser = async function(username) {
     return;
   }
 
-  const u = users.find(x => x.username === username);
-  await updateDoc(doc(db, "users", username), { active: !u.active });
+  const user = users.find(u => (u.username || u.id) === username);
+  if (!user) return;
+
+  await updateDoc(doc(db, "users", username), { active: user.active === false });
 };
 
 window.deleteUser = async function(username) {
@@ -597,23 +687,23 @@ function clearUserForm() {
 function renderStats() {
   const today = new Date().toDateString();
 
-  const todaySalesArr = sales.filter(s => new Date(s.createdAtMs).toDateString() === today);
-  const todayRevenueSum = todaySalesArr.reduce((sum, s) => sum + Number(s.total || 0), 0);
-  const totalRevenueSum = sales.reduce((sum, s) => sum + Number(s.total || 0), 0);
+  const todaySalesArr = sales.filter(sale => new Date(sale.createdAtMs).toDateString() === today);
+  const todayRevenueSum = todaySalesArr.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const totalRevenueSum = sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
 
   $("todayRevenue").textContent = money(todayRevenueSum);
   $("todaySales").textContent = todaySalesArr.length;
   $("totalRevenue").textContent = money(totalRevenueSum);
   $("totalSales").textContent = sales.length;
 
-  $("salesList").innerHTML = sales.slice(0, 30).map(s => `
+  $("salesList").innerHTML = sales.slice(0, 30).map(sale => `
     <div class="admin-item">
       <div>
-        <b>${money(s.total)}</b><br>
-        Mitarbeiter: ${s.user}<br>
-        Rabatt: ${s.discount}%<br>
-        Artikel: ${s.items.map(i => `${i.quantity}x ${i.name}`).join(", ")}<br>
-        Datum: ${new Date(s.createdAtMs).toLocaleString("de-DE")}
+        <b>${money(sale.total)}</b><br>
+        Mitarbeiter: ${escapeHtml(sale.user || "-")}<br>
+        Rabatt: ${Number(sale.discount || 0)}%<br>
+        Artikel: ${(sale.items || []).map(item => `${item.quantity}x ${escapeHtml(item.name)}`).join(", ")}<br>
+        Datum: ${new Date(sale.createdAtMs).toLocaleString("de-DE")}
       </div>
     </div>
   `).join("");
@@ -621,8 +711,8 @@ function renderStats() {
 
 async function dailyClose() {
   const today = new Date().toDateString();
-  const todaySalesArr = sales.filter(s => new Date(s.createdAtMs).toDateString() === today);
-  const revenue = todaySalesArr.reduce((sum, s) => sum + Number(s.total || 0), 0);
+  const todaySalesArr = sales.filter(sale => new Date(sale.createdAtMs).toDateString() === today);
+  const revenue = todaySalesArr.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
 
   const text =
     `Tagesabschluss\n\n` +
@@ -659,13 +749,32 @@ async function discordLog(message) {
         content: message
       })
     });
-  } catch (err) {
-    console.error("Discord Webhook Fehler:", err);
+  } catch (error) {
+    console.error("Discord Webhook Fehler:", error);
   }
+}
+
+function updateClock() {
+  const now = new Date();
+  $("clockTime").textContent = now.toLocaleTimeString("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  $("clockDate").textContent = now.toLocaleDateString("de-DE");
 }
 
 function money(value) {
   return `${Number(value || 0).toLocaleString("de-DE")} €`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 boot();
