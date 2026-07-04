@@ -15,7 +15,7 @@ import {
   orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
-import { firebaseConfig, DISCORD_WEBHOOK_URL } from "./firebase-config.js";
+import { firebaseConfig, DISCORD_WEBHOOK_URL } from "./firebase.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
