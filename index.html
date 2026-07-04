@@ -10,7 +10,8 @@
 
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
-    <h1>La Casa del Nonno</h1>
+    <div class="login-logo">🍷</div>
+    <h1>LA CASA DEL NONNO</h1>
     <p>Kassensystem V3</p>
 
     <input id="loginUsername" placeholder="Benutzername">
@@ -31,65 +32,85 @@
 <div id="appScreen" class="app hidden">
 
   <header class="topbar">
-    <div>
-      <h1>La Casa del Nonno</h1>
-      <span>Kassensystem V3</span>
+    <div class="brand">
+      <div class="brand-logo">🍷</div>
+      <div>
+        <h1>LA CASA DEL NONNO</h1>
+        <span>CAFFÈ & DOLCI FATTI CON AMORE</span>
+      </div>
     </div>
 
-    <div class="user-box">
-      <span id="currentUserLabel"></span>
-      <button id="logoutBtn">Logout</button>
+    <div class="employee-box">
+      <label>Mitarbeiter</label>
+      <div id="currentUserLabel" class="employee-display"></div>
     </div>
+
+    <button id="inventoryQuickBtn" class="inventory-open">📦 Inventar öffnen</button>
+
+    <div class="clock-box">
+      <div id="clockTime">--:--</div>
+      <div id="clockDate">--.--.----</div>
+    </div>
+
+    <button id="logoutBtn" class="logout-btn">Logout</button>
   </header>
 
   <nav class="tabs">
-    <button class="tab active" data-page="posPage">Kasse</button>
-    <button class="tab" data-page="inventoryPage">Inventur</button>
-    <button class="tab" data-page="productsPage">Produkte</button>
-    <button class="tab" data-page="usersPage">Mitarbeiter</button>
-    <button class="tab" data-page="statsPage">Statistik</button>
-    <button class="tab" data-page="closingPage">Tagesabschluss</button>
+    <button class="tab active" data-page="posPage">🍷 Getränke</button>
+    <button class="tab" data-page="inventoryPage">📦 Inventur</button>
+    <button class="tab" data-page="productsPage">🍽️ Produkte</button>
+    <button class="tab" data-page="usersPage">👤 Mitarbeiter</button>
+    <button class="tab" data-page="statsPage">📊 Statistik</button>
+    <button class="tab" data-page="closingPage">🧾 Tagesabschluss</button>
   </nav>
 
   <main>
-
     <section id="posPage" class="page active-page">
       <div class="pos-layout">
         <div class="products-panel">
-          <h2>Produkte</h2>
           <div id="categoryButtons" class="category-buttons"></div>
           <div id="productGrid" class="product-grid"></div>
+
+          <div class="info-bar">
+            ⓘ Klicken Sie auf ein Produkt oder verwenden Sie +/- um die Menge auszuwählen.
+          </div>
         </div>
 
-        <div class="cart-panel">
-          <h2>Warenkorb</h2>
+        <aside class="cart-panel">
+          <div class="cart-head">
+            <h2>🛒 WARENKORB</h2>
+            <button id="clearCartBtn" class="storno-btn">Storno</button>
+          </div>
+
           <div id="cartItems" class="cart-items"></div>
 
           <div class="discount-box">
-            <h3>Rabatt</h3>
+            <h3>🏷️ RABATT</h3>
             <div id="discountButtons" class="discount-buttons"></div>
-            <button id="removeDiscountBtn">Rabatt entfernen</button>
+            <button id="removeDiscountBtn" class="remove-discount">🗑️ Rabatt entfernen</button>
           </div>
 
           <div class="cart-total">
-            <div>Zwischensumme: <b id="subtotalLabel">0 €</b></div>
-            <div>Rabatt: <b id="discountLabel">0 %</b></div>
-            <div class="big-total">Gesamt: <b id="totalLabel">0 €</b></div>
+            <div class="total-label">GESAMT</div>
+            <div class="big-total" id="totalLabel">0 €</div>
+            <div class="small-total">
+              Zwischensumme: <b id="subtotalLabel">0 €</b> · Rabatt: <b id="discountLabel">0 %</b>
+            </div>
           </div>
 
-          <button id="checkoutBtn" class="checkout">Verkauf abschließen</button>
-          <button id="clearCartBtn" class="danger">Warenkorb leeren</button>
-        </div>
+          <button id="checkoutBtn" class="checkout">🏪 ZUR KASSE</button>
+          <div class="checkout-hint">Klicken um Zahlung abzuschließen</div>
+        </aside>
       </div>
     </section>
 
     <section id="inventoryPage" class="page">
-      <h2>Inventur / Live-Lager</h2>
+      <h2>📦 Inventur / Live-Lager</h2>
       <div id="inventoryList" class="admin-list"></div>
     </section>
 
     <section id="productsPage" class="page">
-      <h2>Produktverwaltung</h2>
+      <h2>🍽️ Produktverwaltung</h2>
 
       <div class="form-grid">
         <input id="productName" placeholder="Produktname">
@@ -104,7 +125,7 @@
     </section>
 
     <section id="usersPage" class="page">
-      <h2>Mitarbeiterverwaltung</h2>
+      <h2>👤 Mitarbeiterverwaltung</h2>
 
       <div class="form-grid">
         <input id="newUsername" placeholder="Benutzername">
@@ -122,22 +143,23 @@
     </section>
 
     <section id="statsPage" class="page">
-      <h2>Verkaufsstatistik</h2>
+      <h2>📊 Verkaufsstatistik</h2>
+
       <div class="stats-grid">
         <div class="stat-card">Heute Umsatz<br><b id="todayRevenue">0 €</b></div>
         <div class="stat-card">Heute Verkäufe<br><b id="todaySales">0</b></div>
         <div class="stat-card">Gesamt Umsatz<br><b id="totalRevenue">0 €</b></div>
         <div class="stat-card">Gesamt Verkäufe<br><b id="totalSales">0</b></div>
       </div>
+
       <div id="salesList" class="admin-list"></div>
     </section>
 
     <section id="closingPage" class="page">
-      <h2>Tagesabschluss</h2>
+      <h2>🧾 Tagesabschluss</h2>
       <button id="dailyCloseBtn" class="checkout">Tagesabschluss erstellen</button>
       <div id="dailyCloseResult" class="daily-result"></div>
     </section>
-
   </main>
 </div>
 
