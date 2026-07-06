@@ -25,6 +25,7 @@ let products = [];
 let users = [];
 let sales = [];
 let cart = [];
+let selectedQuantities = {};
 let selectedCategory = "Alle";
 let discount = 0;
 let editingProductId = null;
@@ -206,6 +207,7 @@ async function login() {
 function logout() {
   currentUser = null;
   cart = [];
+  selectedQuantities = {};
   discount = 0;
 
   $("loginScreen").classList.remove("hidden");
@@ -213,6 +215,7 @@ function logout() {
   $("loginPassword").value = "";
 
   renderCart();
+  renderProducts();
 }
 
 function applyRoleVisibility() {
@@ -291,83 +294,70 @@ function renderProducts() {
     return active && categoryMatch;
   });
 
-  $("productGrid").innerHTML = visibleProducts.map(product => `
-    <div class="product-card">
-      <div class="icon">${escapeHtml(product.icon || "🍽️")}</div>
-      <h3>${escapeHtml(product.name)}</h3>
-      <div class="product-price">${money(product.price)}</div>
-      <div class="product-stock">Lager: ${Number(product.stock || 0)}</div>
+  $("productGrid").innerHTML = visibleProducts.map(product => {
+    const selectedQuantity = selectedQuantities[product.id] || 0;
 
-      <div class="quick-row">
-        <button onclick="window.quickStock('${product.id}', -10)">-10</button>
-        <button onclick="window.quickStock('${product.id}', -5)">-5</button>
-        <button>0</button>
-        <button onclick="window.quickStock('${product.id}', 5)">+5</button>
-        <button onclick="window.quickStock('${product.id}', 10)">+10</button>
+    return `
+      <div class="product-card">
+        <div class="icon">${escapeHtml(product.icon || "🍽️")}</div>
+        <h3>${escapeHtml(product.name)}</h3>
+        <div class="product-price">${money(product.price)}</div>
+        <div class="product-stock">Lager: ${Number(product.stock || 0)}</div>
+
+        <div class="quick-row">
+          <button onclick="window.changeSelectedQty('${product.id}', -10)">-10</button>
+          <button onclick="window.changeSelectedQty('${product.id}', -5)">-5</button>
+          <button class="quantity-display" disabled>${selectedQuantity}</button>
+          <button onclick="window.changeSelectedQty('${product.id}', 5)">+5</button>
+          <button onclick="window.changeSelectedQty('${product.id}', 10)">+10</button>
+        </div>
+
+        <div class="qty-row">
+          <button onclick="window.changeSelectedQty('${product.id}', -1)">−</button>
+          <button onclick="window.changeSelectedQty('${product.id}', 1)">+</button>
+        </div>
+
+        <button class="add-btn" onclick="window.addSelectedToCart('${product.id}')">Hinzufügen</button>
       </div>
-
-      <div class="qty-row">
-        <button onclick="window.changeProductCart('${product.id}', -1)">−</button>
-        <button onclick="window.addToCart('${product.id}')">+</button>
-      </div>
-
-      <button class="add-btn" onclick="window.addToCart('${product.id}')">Hinzufügen</button>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 }
 
-window.quickStock = async function(productId, amount) {
-  if (!hasPower(2)) {
-    alert("Keine Berechtigung für Lageränderung.");
-    return;
-  }
+window.changeSelectedQty = function(productId, amount) {
+  const current = selectedQuantities[productId] || 0;
+  selectedQuantities[productId] = Math.max(0, current + amount);
+  renderProducts();
+};
 
+window.addSelectedToCart = function(productId) {
   const product = products.find(p => p.id === productId);
   if (!product) return;
 
-  const newStock = Math.max(0, Number(product.stock || 0) + amount);
-  await updateDoc(doc(db, "products", productId), { stock: newStock });
-  await discordLog(`📦 Lager geändert: **${product.name}** jetzt ${newStock}`);
-};
+  const quantity = selectedQuantities[productId] || 0;
 
-window.changeProductCart = function(productId, amount) {
-  if (amount > 0) {
-    window.addToCart(productId);
+  if (quantity <= 0) {
+    alert("Bitte erst eine Menge auswählen.");
     return;
   }
-
-  const item = cart.find(cartItem => cartItem.id === productId);
-
-  if (!item) return;
-
-  item.quantity -= 1;
-
-  if (item.quantity <= 0) {
-    cart = cart.filter(cartItem => cartItem.id !== productId);
-  }
-
-  renderCart();
-};
-
-window.addToCart = function(productId) {
-  const product = products.find(p => p.id === productId);
-  if (!product) return;
 
   const existingItem = cart.find(item => item.id === product.id);
 
   if (existingItem) {
-    existingItem.quantity += 1;
+    existingItem.quantity += quantity;
   } else {
     cart.push({
       id: product.id,
       name: product.name,
       price: Number(product.price || 0),
       icon: product.icon || "🍽️",
-      quantity: 1
+      quantity
     });
   }
 
+  selectedQuantities[productId] = 0;
+
   renderCart();
+  renderProducts();
 };
 
 function renderCart() {
@@ -392,19 +382,6 @@ function renderCart() {
   $("totalLabel").textContent = money(total);
 }
 
-window.changeQty = function(id, amount) {
-  const item = cart.find(cartItem => cartItem.id === id);
-  if (!item) return;
-
-  item.quantity += amount;
-
-  if (item.quantity <= 0) {
-    cart = cart.filter(cartItem => cartItem.id !== id);
-  }
-
-  renderCart();
-};
-
 window.removeCartItem = function(id) {
   cart = cart.filter(item => item.id !== id);
   renderCart();
@@ -412,9 +389,11 @@ window.removeCartItem = function(id) {
 
 function clearCart() {
   cart = [];
+  selectedQuantities = {};
   discount = 0;
   renderDiscountButtons();
   renderCart();
+  renderProducts();
 }
 
 function renderDiscountButtons() {
@@ -604,6 +583,20 @@ function renderInventory() {
   `).join("");
 }
 
+window.quickStock = async function(productId, amount) {
+  if (!hasPower(2)) {
+    alert("Keine Berechtigung für Lageränderung.");
+    return;
+  }
+
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+
+  const newStock = Math.max(0, Number(product.stock || 0) + amount);
+  await updateDoc(doc(db, "products", productId), { stock: newStock });
+  await discordLog(`📦 Lager geändert: **${product.name}** jetzt ${newStock}`);
+};
+
 async function saveUser() {
   if (!hasPower(4)) {
     alert("Nur Geschäftsführer darf Mitarbeiter verwalten.");
@@ -756,6 +749,7 @@ async function discordLog(message) {
 
 function updateClock() {
   const now = new Date();
+
   $("clockTime").textContent = now.toLocaleTimeString("de-DE", {
     hour: "2-digit",
     minute: "2-digit"
