@@ -38,53 +38,88 @@ const rolePower = {
 };
 
 const defaultProducts = [
-  { name: "Vino della Casa", category: "Getränke", price: 350, icon: "🍷", stock: 1370 },
-  { name: "Tè Freddo al Limone", category: "Getränke", price: 195, icon: "🍹", stock: 1205 },
-  { name: "Cola", category: "Getränke", price: 130, icon: "🥤", stock: 1038 },
-  { name: "Energy Drink", category: "Getränke", price: 200, icon: "⚡", stock: 1986 },
-  { name: "Kaffee", category: "Getränke", price: 190, icon: "☕", stock: 1670 },
-  { name: "Espresso", category: "Getränke", price: 190, icon: "☕", stock: 1446 },
-  { name: "Acqua Naturale", category: "Getränke", price: 120, icon: "💧", stock: 1880 },
-  { name: "Acqua Frizzante", category: "Getränke", price: 120, icon: "🍾", stock: 1880 },
-  { name: "Succo d’Arancia", category: "Getränke", price: 180, icon: "🍊", stock: 1450 },
-  { name: "Limonata", category: "Getränke", price: 170, icon: "🍋", stock: 1320 },
+  { id: "espresso", name: "Espresso", category: "Getränke", price: 190, icon: "☕", stock: 100 },
+  { id: "kaffee", name: "Kaffee", category: "Getränke", price: 190, icon: "☕", stock: 100 },
+  { id: "hauswein_rot", name: "Hauswein rot", category: "Getränke", price: 350, icon: "🍷", stock: 100 },
+  { id: "limoncello", name: "Limoncello", category: "Getränke", price: 350, icon: "🍋", stock: 100 },
+  { id: "eistee_pfirsich", name: "Eistee Pfirsich", category: "Getränke", price: 195, icon: "🧊", stock: 100 },
+  { id: "cola", name: "Cola", category: "Getränke", price: 130, icon: "🥤", stock: 100 },
+  { id: "energy_drink", name: "Energy Drink", category: "Getränke", price: 200, icon: "⚡", stock: 100 },
 
-  { name: "Pizza Margherita", category: "Pizza", price: 330, icon: "🍕", stock: 100 },
-  { name: "Pizza Salame", category: "Pizza", price: 330, icon: "🍕", stock: 100 },
-  { name: "Pizza Tonno", category: "Pizza", price: 330, icon: "🍕", stock: 100 },
+  { id: "pizza_margherita", name: "Pizza Margherita", category: "Pizzen", price: 330, icon: "🍕", stock: 100 },
+  { id: "pizza_salami_scharf", name: "Pizza Salami scharf", category: "Pizzen", price: 330, icon: "🍕", stock: 100 },
+  { id: "pizza_tonno_e_cipolla", name: "Pizza Tonno e Cipolla", category: "Pizzen", price: 330, icon: "🍕", stock: 100 },
+  { id: "calzone", name: "Calzone", category: "Pizzen", price: 360, icon: "🥟", stock: 100 },
 
-  { name: "Antipasto Italiano della Casa", category: "Antipasti", price: 110, icon: "🥗", stock: 100 },
-  { name: "Bruschetta", category: "Antipasti", price: 165, icon: "🥖", stock: 100 },
+  { id: "gemischte_vorspeisenplatte", name: "Gemischte Vorspeisenplatte", category: "Vorspeisen", price: 110, icon: "🥗", stock: 100 },
+  { id: "bruschetta_mit_tomaten", name: "Bruschetta mit Tomaten", category: "Vorspeisen", price: 165, icon: "🥖", stock: 100 },
 
-  { name: "Pasta Carbonara", category: "Pasta", price: 300, icon: "🍝", stock: 100 },
-  { name: "Pasta Bolognese", category: "Pasta", price: 300, icon: "🍝", stock: 100 },
-  { name: "Lasagna", category: "Pasta", price: 550, icon: "🍝", stock: 100 },
-  { name: "Grigliata Mista di Pesce", category: "Pasta", price: 410, icon: "🐟", stock: 100 },
+  { id: "lasagne_al_forno", name: "Lasagne al Forno", category: "Hauptgerichte", price: 550, icon: "🍝", stock: 100 },
+  { id: "gemischter_fisch_vom_grill", name: "Gemischter Fisch vom Grill", category: "Hauptgerichte", price: 410, icon: "🐟", stock: 100 },
+  { id: "parmigiana_di_melanzane", name: "Parmigiana di Melanzane", category: "Hauptgerichte", price: 450, icon: "🍆", stock: 100 },
 
-  { name: "Tiramisu", category: "Dessert", price: 300, icon: "🍰", stock: 100 },
-  { name: "Panna Cotta", category: "Dessert", price: 300, icon: "🍮", stock: 100 },
-  { name: "Coppa Gelato della Casa", category: "Dessert", price: 300, icon: "🍨", stock: 100 },
+  { id: "spaghetti_carbonara", name: "Spaghetti Carbonara", category: "Pasta", price: 300, icon: "🍝", stock: 100 },
+  { id: "spaghetti_bolognese", name: "Spaghetti Bolognese", category: "Pasta", price: 300, icon: "🍝", stock: 100 },
+  { id: "penne_all_arrabbiata", name: "Penne all’Arrabbiata", category: "Pasta", price: 320, icon: "🍝", stock: 100 },
+  { id: "frittatina_di_pasta", name: "Frittatina di Pasta", category: "Pasta", price: 260, icon: "🍝", stock: 100 },
 
-  { name: "Menü 1", category: "Menüs", price: 540, icon: "⭐", stock: 100 },
-  { name: "Menü 2", category: "Menüs", price: 600, icon: "⭐", stock: 100 },
-  { name: "Menü 3", category: "Menüs", price: 860, icon: "⭐", stock: 100 }
+  { id: "hausgemachtes_tiramisu", name: "Hausgemachtes Tiramisu", category: "Desserts", price: 275, icon: "🍰", stock: 100 },
+  { id: "panna_cotta_mit_waldbeeren", name: "Panna Cotta mit Waldbeeren", category: "Desserts", price: 110, icon: "🍮", stock: 100 },
+  { id: "hausgemachtes_eis", name: "Hausgemachtes Eis", category: "Desserts", price: 400, icon: "🍨", stock: 100 },
+  { id: "zeppole_di_san_giuseppe", name: "Zeppole di San Giuseppe", category: "Desserts", price: 320, icon: "🥯", stock: 100 },
+
+  { id: "menu_1", name: "Menü 1 Italienischer Lunch", category: "Menüs", price: 540, icon: "⭐", stock: 100 },
+  { id: "menu_2", name: "Menü 2 Traditionelle Hausküche", category: "Menüs", price: 600, icon: "⭐", stock: 100 },
+  { id: "menu_3", name: "Menü 3 Fischgenuss", category: "Menüs", price: 860, icon: "⭐", stock: 100 }
 ];
 
 const menuIngredients = {
-  "Menü 1": ["Tè Freddo al Limone", "Pizza Margherita", "Panna Cotta"],
-  "Menü 2": ["Cola", "Pasta Carbonara", "Tiramisu"],
-  "Menü 3": ["Energy Drink", "Grigliata Mista di Pesce", "Coppa Gelato della Casa"]
+  "Menü 1 Italienischer Lunch": [
+    "Eistee Pfirsich",
+    "Pizza Margherita",
+    "Panna Cotta mit Waldbeeren"
+  ],
+  "Menü 2 Traditionelle Hausküche": [
+    "Cola",
+    "Spaghetti Carbonara",
+    "Hausgemachtes Tiramisu"
+  ],
+  "Menü 3 Fischgenuss": [
+    "Limoncello",
+    "Gemischter Fisch vom Grill",
+    "Zeppole di San Giuseppe"
+  ]
 };
 
 const categoryIcons = {
   "Alle": "🍽️",
   "Getränke": "🍷",
-  "Pizza": "🍕",
-  "Antipasti": "🥗",
+  "Pizzen": "🍕",
+  "Vorspeisen": "🥗",
+  "Hauptgerichte": "🍽️",
   "Pasta": "🍝",
-  "Dessert": "🍨",
+  "Desserts": "🍨",
   "Menüs": "⭐"
 };
+
+const oldSeedNamesToDisable = [
+  "Vino della Casa",
+  "Tè Freddo al Limone",
+  "Pizza Salame",
+  "Pizza Tonno",
+  "Antipasto Italiano della Casa",
+  "Bruschetta",
+  "Pasta Carbonara",
+  "Pasta Bolognese",
+  "Lasagna",
+  "Grigliata Mista di Pesce",
+  "Tiramisu",
+  "Panna Cotta",
+  "Coppa Gelato della Casa",
+  "Menü 1",
+  "Menü 2",
+  "Menü 3"
+];
 
 const $ = id => document.getElementById(id);
 
@@ -121,7 +156,7 @@ async function boot() {
   setInterval(updateClock, 1000);
 
   await ensureDefaultAdmin();
-  await ensureDefaultProducts();
+  await syncMenuProducts();
 
   listenProducts();
   listenUsers();
@@ -144,15 +179,57 @@ async function ensureDefaultAdmin() {
   }
 }
 
-async function ensureDefaultProducts() {
+async function syncMenuProducts() {
   const snap = await getDocs(collection(db, "products"));
+  const existingProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-  if (snap.empty) {
-    for (const product of defaultProducts) {
-      await addDoc(collection(db, "products"), {
-        ...product,
+  for (const product of defaultProducts) {
+    const sameNameProduct = existingProducts.find(p => normalize(p.name) === normalize(product.name));
+    const stableRef = doc(db, "products", product.id);
+    const stableSnap = await getDoc(stableRef);
+
+    if (stableSnap.exists()) {
+      await updateDoc(stableRef, {
+        name: product.name,
+        category: product.category,
+        price: product.price,
+        icon: product.icon,
         active: true,
+        menuProduct: true,
+        updatedAt: serverTimestamp()
+      });
+    } else if (sameNameProduct) {
+      await updateDoc(doc(db, "products", sameNameProduct.id), {
+        name: product.name,
+        category: product.category,
+        price: product.price,
+        icon: product.icon,
+        active: true,
+        menuProduct: true,
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await setDoc(stableRef, {
+        name: product.name,
+        category: product.category,
+        price: product.price,
+        icon: product.icon,
+        stock: product.stock,
+        active: true,
+        menuProduct: true,
         createdAt: serverTimestamp()
+      });
+    }
+  }
+
+  for (const oldProduct of existingProducts) {
+    const isOldSeed = oldSeedNamesToDisable.some(name => normalize(name) === normalize(oldProduct.name));
+    const stillExistsInNewMenu = defaultProducts.some(product => normalize(product.name) === normalize(oldProduct.name));
+
+    if (isOldSeed && !stillExistsInNewMenu) {
+      await updateDoc(doc(db, "products", oldProduct.id), {
+        active: false,
+        updatedAt: serverTimestamp()
       });
     }
   }
@@ -760,6 +837,17 @@ function updateClock() {
 
 function money(value) {
   return `${Number(value || 0).toLocaleString("de-DE")} €`;
+}
+
+function normalize(value) {
+  return String(value || "")
+    .toLowerCase()
+    .trim()
+    .replaceAll("’", "'")
+    .replaceAll("ä", "ae")
+    .replaceAll("ö", "oe")
+    .replaceAll("ü", "ue")
+    .replaceAll("ß", "ss");
 }
 
 function escapeHtml(value) {
