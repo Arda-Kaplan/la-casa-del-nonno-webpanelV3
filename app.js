@@ -889,7 +889,7 @@ function applyRoleVisibility() {
 
   setElementDisplay(
     document.querySelector('[data-page="inventoryPage"]'),
-    power >= 2
+    power >= 3
   );
 
 
@@ -907,7 +907,7 @@ function applyRoleVisibility() {
 
   setElementDisplay(
     $("inventoryQuickBtn"),
-    power >= 2
+    power >= 3
   );
 
 }
