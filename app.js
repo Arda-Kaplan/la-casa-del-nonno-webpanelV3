@@ -2137,7 +2137,7 @@ function renderInventory() {
 
 async function saveInventoryInput(input) {
 
-  if (!hasPower(2)) {
+  if (!hasPower(3)) {
 
     alert("Keine Berechtigung für Lageränderung.");
 
